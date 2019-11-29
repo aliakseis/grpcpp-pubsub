@@ -140,6 +140,8 @@ private:
 
 int main()
 {
+    setSignalHandler();
+
     GreeterClient greeter(grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()), "42");
     std::thread thread_ = std::thread(&GreeterClient::AsyncCompleteRpc, &greeter);
     thread_.join();

@@ -56,7 +56,7 @@ class AsyncClientCallM1
     enum CallStatus { PROCESS, FINISH, DESTROY } callStatus;
     std::unique_ptr< grpc::ClientAsyncWriter<PublishSubscribe::Notification> > responder;
     unsigned mcounter;
-    bool writing_mode_;
+    std::atomic_bool writing_mode_;
 
 public:
     AsyncClientCallM1(CompletionQueue& cq_, std::unique_ptr<PublishSubscribe::NotificationObserver::Stub>& stub_) 
@@ -64,12 +64,18 @@ public:
     {
         std::cout << "[ProceedM1]: new client M-1" << std::endl;
         responder = stub_->AsyncNotify(&context, &reply, &cq_, this);
-        terminator.connect(MakeDelegate<&ClientContext::TryCancel>(&context));
+        //terminator.connect(MakeDelegate<&ClientContext::TryCancel>(&context));
+        terminator.connect(MakeDelegate<&AsyncClientCallM1::Stop>(this));
         callStatus = PROCESS;
     }
     ~AsyncClientCallM1()
     {
-        terminator.disconnect(MakeDelegate<&ClientContext::TryCancel>(&context));
+        //terminator.disconnect(MakeDelegate<&ClientContext::TryCancel>(&context));
+        terminator.disconnect(MakeDelegate<&AsyncClientCallM1::Stop>(this));
+    }
+    void Stop()
+    {
+        writing_mode_ = false;
     }
     void Proceed(bool ok = true)
     {
@@ -150,6 +156,8 @@ int main(/*int argc, char** argv*/) {
     // are created. This channel models a connection to an endpoint (in this case,
     // localhost at port 50051). We indicate that the channel isn't authenticated
     // (use of InsecureChannelCredentials()).
+
+    setSignalHandler();
 
     GreeterClient greeter(grpc::CreateChannel("localhost:50051", grpc::InsecureChannelCredentials()));
     std::thread thread_ = std::thread(&GreeterClient::AsyncCompleteRpc, &greeter);
